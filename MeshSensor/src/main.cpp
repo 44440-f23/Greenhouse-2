@@ -10,6 +10,33 @@
 //************************************************************
 #include <Arduino.h>
 #include <painlessMesh.h>
+#include "Wire.h"
+
+// Temperature and Humidity Sensor
+//DFRobot SEN0546
+#define address 0x40
+char dtaUart[15];
+char dtaLen = 0;
+uint8_t Data[100] = {0};
+uint8_t buff[100] = {0};
+uint8_t readReg(uint8_t reg, const void* pBuf, size_t size);
+
+uint8_t buf[4] = {0};
+uint16_t data;
+uint16_t data1;
+float temperature;
+float humidity;
+float ftemp;
+
+/*
+// Analog Soil Moisture Sensor
+// DFRobot SEN0308
+const int AirValue = 0;
+const int WaterValue = 0;
+
+int intervals = (AirValue - WaterValue) / 3;
+int soilMoistureValue = 0;
+*/
 
 // some gpio pin that is connected to an LED...
 // on my rig, this is 5, change to the right number of your LED.
@@ -66,6 +93,8 @@ void setup()
   //Setup Serial Console
   Serial.begin(9600);
 
+  Wire.begin();
+  
   //Setup Pinmode(s)
   pinMode(LED, OUTPUT);
 
@@ -119,6 +148,51 @@ void loop()
 
   //Do the LED task based on the flag
   digitalWrite(LED, !onFlag);
+
+  //DFRobot SEN0546
+  readReg(0x00, buf, 4);
+  data = buf[0] << 8 | buf[1];
+  data1 = buf[2] << 8 | buf[3];
+  //Celcius
+  temperature = ((float)data * 165 / 65535.0) - 40.0;
+  ftemp = (temperature * 9/5) + 32;
+  humidity = ((float)data1 / 65535.0) * 100;
+  Serial.print("Temperature:");
+  Serial.println(ftemp);
+  Serial.print("humidity:");
+  Serial.println(humidity);
+  delay(500);
+
+/*
+  //DFRobot SEN0308
+  //Serial.println(analogRead(A0));
+  //delay(100);
+  soilMoistureValue = analogRead(A0);
+  
+  Serial.print("Soil Moisture:");
+  Serial.println(soilMoistureValue);
+
+  if(soilMoistureValue > WaterValue && soilMoistureValue < (WaterValue + intervals))
+  {
+    Serial.println("Very Wet");
+  }
+  else if(soilMoistureValue > (WaterValue + intervals) && soilMoistureValue < (AirValue - intervals))
+  {
+    Serial.println("Wet");
+  }
+  else if(soilMoistureValue < AirValue && soilMoistureValue > (AirValue - intervals))
+  {
+    Serial.println("Dry");
+  }
+  delay(100);
+*/
+
+  //DFRobot DFR0026
+  int val;
+  val = analogRead(0);
+  Serial.print("Light:");
+  Serial.println(val, DEC);
+  delay(100);
 }
 
 void sendMessage() 
@@ -238,4 +312,31 @@ uint32_t parseSimpleJson(const char* jsonString)
 
   uint32_t baseID = jsonDoc["basestation"];
   return baseID;
+}
+
+uint8_t readReg(uint8_t reg, const void* pBuf, size_t size)
+{
+  if (pBuf == NULL)
+  {
+    Serial.println("pBuf ERROR!! : null pointer");
+  }
+  
+  uint8_t * _pBuf = (uint8_t *)pBuf;
+  Wire.beginTransmission(address);
+  Wire.write(&reg, 1);
+
+  if (Wire.endTransmission() != 0)
+  {
+    return 0;
+  }
+
+  delay(20);
+  Wire.requestFrom(address, (uint8_t) size);
+
+  for (uint16_t i = 0; i < size; i++)
+  {
+    _pBuf[i] = Wire.read();
+  }
+
+  return size;
 }
