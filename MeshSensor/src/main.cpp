@@ -65,11 +65,10 @@ void sendMessage();
 void receivedCallback(uint32_t from, String & msg);
 void newConnectionCallback(uint32_t nodeId);
 void changedConnectionCallback(); 
-void nodeTimeAdjustedCallback(int32_t offset); 
-void delayReceivedCallback(uint32_t from, int32_t delay);
 void sendMessage();
-void resetBlinkTask();
 uint32_t parseSimpleJson(const char* jsonString);
+
+void gatherData();
 
 //TODO - understand this code
 Task taskSendMessage( TASK_SECOND * MSG_DELAY_SEC, TASK_FOREVER, &sendMessage );
@@ -109,32 +108,10 @@ void setup()
   mesh.onReceive(&receivedCallback);
   mesh.onNewConnection(&newConnectionCallback);
   mesh.onChangedConnections(&changedConnectionCallback);
-  mesh.onNodeTimeAdjusted(&nodeTimeAdjustedCallback);
-  mesh.onNodeDelayReceived(&delayReceivedCallback);
 
   //Add a task our schedule
   userScheduler.addTask( taskSendMessage );
   taskSendMessage.enable();
-
-  //TODO - understand the set method
-  blinkNoNodes.set(BLINK_PERIOD, (mesh.getNodeList().size() + 1) * 2, []() 
-  {
-      // If on, switch off, else switch on
-      onFlag = !onFlag;
-
-      //Delay for a moment
-      blinkNoNodes.delay(BLINK_DURATION);
-
-      //If this is the last thing we are set to do
-      if (blinkNoNodes.isLastIteration()) 
-      {
-        resetBlinkTask();
-      }
-  });
-
-  //We have built the task and now we add it to the schedule
-  userScheduler.addTask(blinkNoNodes);
-  blinkNoNodes.enable();
 
   //TODO - understand this code
   randomSeed(analogRead(A0));
@@ -146,21 +123,6 @@ void loop()
   //Various maintenence tasks
   mesh.update();
 
-  //Do the LED task based on the flag
-  digitalWrite(LED, !onFlag);
-
-  //DFRobot SEN0546
-  readReg(0x00, buf, 4);
-  data = buf[0] << 8 | buf[1];
-  data1 = buf[2] << 8 | buf[3];
-  //Celcius
-  temperature = ((float)data * 165 / 65535.0) - 40.0;
-  ftemp = (temperature * 9/5) + 32;
-  humidity = ((float)data1 / 65535.0) * 100;
-  Serial.print("Temperature:");
-  Serial.println(ftemp);
-  Serial.print("humidity:");
-  Serial.println(humidity);
   delay(500);
 
 /*
@@ -187,6 +149,19 @@ void loop()
   delay(100);
 */
 
+}
+
+void gatherData()
+{
+  //DFRobot SEN0546
+  readReg(0x00, buf, 4);
+  data = buf[0] << 8 | buf[1];
+  data1 = buf[2] << 8 | buf[3];
+  
+  //Celcius
+  temperature = ((float)data * 165 / 65535.0) - 40.0;
+  humidity = ((float)data1 / 65535.0) * 100;
+
   //DFRobot DFR0026
   int val;
   val = analogRead(0);
@@ -197,10 +172,11 @@ void loop()
 
 void sendMessage() 
 {
-  String msg = "Greenhouse 2";
-  //msg += mesh.getNodeId();
-  //msg += String(ESP.getFreeHeap());
-  //mesh.sendBroadcast(msg);
+  DynamicJsonDocument doc(1024);
+  doc["id"] = "Greenhouse 2";
+  doc["temp"];
+
+  String msg = "{id:Greenhouse 2, temp:}";
 
   if(basestationID == 0)
   {
@@ -209,33 +185,12 @@ void sendMessage()
   else
   {
     mesh.sendSingle(basestationID, msg);
+    Serial.println("Sent: " + msg);
   }
-
-  // //TODO - Understand this flag
-  // if (calc_delay) 
-  // {
-  //   //SimpleList<uint32_t>::iterator node = nodes.begin(); this can be changed to the line below
-  //   auto node = nodes.begin();
-
-  //   //Do this for every node
-  //   while (node != nodes.end()) 
-  //   {
-  //     //TODO - understand this code
-  //     mesh.startDelayMeas(*node);
-
-  //     //Incrimentation
-  //     node++;
-  //   }
-
-  //   //TODO - understand this flag
-  //   calc_delay = false;
-  // }
-
-  //Serial.printf("Sending message: %s\n", msg.c_str());
-  Serial.println("Send: " + msg);
   
   //Scheduled every time between MSG_DELAY_SEC to 5 seconds
-  taskSendMessage.setInterval( random(TASK_SECOND * MSG_DELAY_SEC, TASK_SECOND * 5));
+  //taskSendMessage.setInterval( random(TASK_SECOND * MSG_DELAY_SEC, TASK_SECOND * 5));
+  taskSendMessage.setInterval(5000);
 }
 
 
@@ -256,8 +211,6 @@ void receivedCallback(uint32_t from, String & msg)
 
 void newConnectionCallback(uint32_t nodeId)
 {
-  resetBlinkTask();
- 
   Serial.println("***********************************************************");
   Serial.printf("New Connection, nodeId = %u\n", nodeId);
   Serial.printf("New Connection, %s\n", mesh.subConnectionJson(true).c_str());
@@ -269,30 +222,7 @@ void changedConnectionCallback()
   Serial.println("//////////////////////////////");
   Serial.println("Changed connections");
   Serial.println("//////////////////////////////");
-  //resetBlinkTask();
   calc_delay = true;
-}
-
-void nodeTimeAdjustedCallback(int32_t offset) 
-{
-  //Serial.printf("Adjusted time %u. Offset = %d\n", mesh.getNodeTime(), offset);
-}
-
-void delayReceivedCallback(uint32_t from, int32_t delay) 
-{
-  //Serial.printf("Delay to node %u is %d us\n", from, delay);
-}
-
-void resetBlinkTask()
-{
-  // Finished blinking. Reset task for next run 
-  // blink number of nodes (including this node) times
-  // Calculate delay based on current mesh time and BLINK_PERIOD
-  // This results in blinks between nodes being synced
-
-  onFlag = false;
-  blinkNoNodes.setIterations((mesh.getNodeList().size() + 1) * 2);
-  blinkNoNodes.enableDelayed(BLINK_PERIOD - (mesh.getNodeTime() % (BLINK_PERIOD*1000))/1000);
 }
 
 uint32_t parseSimpleJson(const char* jsonString)
