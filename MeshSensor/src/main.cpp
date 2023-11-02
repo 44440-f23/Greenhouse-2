@@ -27,19 +27,9 @@ uint16_t data1;
 float temperature;
 float humidity;
 float ftemp;
+String gatherData();
 
-/*
-// Analog Soil Moisture Sensor
-// DFRobot SEN0308
-const int AirValue = 0;
-const int WaterValue = 0;
 
-int intervals = (AirValue - WaterValue) / 3;
-int soilMoistureValue = 0;
-*/
-
-// some gpio pin that is connected to an LED...
-// on my rig, this is 5, change to the right number of your LED.
 #ifdef LED_BUILTIN
 #define LED LED_BUILTIN
 #else
@@ -58,34 +48,19 @@ int soilMoistureValue = 0;
 //TODO - parse this in the JSON
 int basestationID = 0;
 
+//Parsing tools
+uint32_t parseSimpleJson(const char* jsonString);
 const size_t bufferSize = 1024;
 
-// Prototypes
+//Mesh Vars
 void sendMessage(); 
 void receivedCallback(uint32_t from, String & msg);
 void newConnectionCallback(uint32_t nodeId);
 void changedConnectionCallback(); 
-void sendMessage();
-uint32_t parseSimpleJson(const char* jsonString);
-
-String gatherData();
-
-//TODO - understand this code
-Task taskSendMessage( TASK_SECOND * MSG_DELAY_SEC, TASK_FOREVER, &sendMessage );
-
-//This is to schedule our personal jobs
-Scheduler userScheduler;
-
-//The actual mesh
 painlessMesh mesh;
-
-//TODO - write a comment here
-bool calc_delay = false;
 SimpleList<uint32_t> nodes;
-
-// Task to blink the number of nodes using the default task params
-Task blinkNoNodes;
-bool onFlag = false;
+Scheduler userScheduler;
+Task taskSendMessage( TASK_SECOND * MSG_DELAY_SEC, TASK_FOREVER, &sendMessage );
 
 void setup() 
 {
@@ -93,9 +68,6 @@ void setup()
   Serial.begin(9600);
 
   Wire.begin();
-  
-  //Setup Pinmode(s)
-  pinMode(LED, OUTPUT);
 
   //Set before init() so that error messages work
   //I dont really understand the ints here
@@ -122,33 +94,7 @@ void loop()
 {
   //Various maintenence tasks
   mesh.update();
-
   delay(500);
-
-/*
-  //DFRobot SEN0308
-  //Serial.println(analogRead(A0));
-  //delay(100);
-  soilMoistureValue = analogRead(A0);
-  
-  Serial.print("Soil Moisture:");
-  Serial.println(soilMoistureValue);
-
-  if(soilMoistureValue > WaterValue && soilMoistureValue < (WaterValue + intervals))
-  {
-    Serial.println("Very Wet");
-  }
-  else if(soilMoistureValue > (WaterValue + intervals) && soilMoistureValue < (AirValue - intervals))
-  {
-    Serial.println("Wet");
-  }
-  else if(soilMoistureValue < AirValue && soilMoistureValue > (AirValue - intervals))
-  {
-    Serial.println("Dry");
-  }
-  delay(100);
-*/
-
 }
 
 String gatherData()
@@ -164,8 +110,6 @@ String gatherData()
 
   //DFRobot DFR0026
   int light = analogRead(A0);
-  //Serial.print("Light:");
-  //Serial.println(light, DEC);
 
   String json = "{\"id\":2,\"temp\":" + String(temperature) + ",\"humidity\":" + String(humidity) + ",\"soilT\":0,\"soilM\":0,\"lightS\":" + String(light) + "}";
   return json;
@@ -175,7 +119,6 @@ String gatherData()
 void sendMessage() 
 {
   String msg = gatherData();
-  //String msg = "{id:Greenhouse 2, temp:}";
 
   if(basestationID == 0)
   {
@@ -186,9 +129,7 @@ void sendMessage()
     mesh.sendSingle(basestationID, msg);
     Serial.println("Sent: " + msg);
   }
-  
-  //Scheduled every time between MSG_DELAY_SEC to 5 seconds
-  //taskSendMessage.setInterval( random(TASK_SECOND * MSG_DELAY_SEC, TASK_SECOND * 5));
+
   taskSendMessage.setInterval(5000);
 }
 
@@ -196,7 +137,7 @@ void sendMessage()
 
 void receivedCallback(uint32_t from, String & msg) 
 {
-  Serial.printf("Received: from %u msg=%s\n", from, msg.c_str());
+  Serial.printf("Received Callback: from %u msg=%s\n", from, msg.c_str());
 
   try
   {
@@ -210,18 +151,16 @@ void receivedCallback(uint32_t from, String & msg)
 
 void newConnectionCallback(uint32_t nodeId)
 {
-  Serial.println("***********************************************************");
-  Serial.printf("New Connection, nodeId = %u\n", nodeId);
-  Serial.printf("New Connection, %s\n", mesh.subConnectionJson(true).c_str());
-  Serial.println("***********************************************************");
+  Serial.println();
+  Serial.printf("New Connection Callback, nodeId = %u\n", nodeId);
+  Serial.println();
 }
 
 void changedConnectionCallback() 
 {
-  Serial.println("//////////////////////////////");
+  Serial.println();
   Serial.println("Changed connections");
-  Serial.println("//////////////////////////////");
-  calc_delay = true;
+  Serial.println();
 }
 
 uint32_t parseSimpleJson(const char* jsonString)
