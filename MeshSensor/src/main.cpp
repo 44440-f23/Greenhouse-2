@@ -68,7 +68,7 @@ void changedConnectionCallback();
 void sendMessage();
 uint32_t parseSimpleJson(const char* jsonString);
 
-void gatherData();
+String gatherData();
 
 //TODO - understand this code
 Task taskSendMessage( TASK_SECOND * MSG_DELAY_SEC, TASK_FOREVER, &sendMessage );
@@ -151,7 +151,7 @@ void loop()
 
 }
 
-void gatherData()
+String gatherData()
 {
   //DFRobot SEN0546
   readReg(0x00, buf, 4);
@@ -163,20 +163,19 @@ void gatherData()
   humidity = ((float)data1 / 65535.0) * 100;
 
   //DFRobot DFR0026
-  int val;
-  val = analogRead(0);
-  Serial.print("Light:");
-  Serial.println(val, DEC);
-  delay(100);
+  int light = analogRead(A0);
+  //Serial.print("Light:");
+  //Serial.println(light, DEC);
+
+  String json = "{\"id\":2,\"temp\":" + String(temperature) + ",\"humidity\":" + String(humidity) + ",\"soilT\":0,\"soilM\":0,\"lightS\":" + String(light) + "}";
+  return json;
+
 }
 
 void sendMessage() 
 {
-  DynamicJsonDocument doc(1024);
-  doc["id"] = "Greenhouse 2";
-  doc["temp"];
-
-  String msg = "{id:Greenhouse 2, temp:}";
+  String msg = gatherData();
+  //String msg = "{id:Greenhouse 2, temp:}";
 
   if(basestationID == 0)
   {
